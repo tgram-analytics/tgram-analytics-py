@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Any
 
@@ -40,11 +41,17 @@ class TGA:
             )
         if not server_url:
             raise ValueError("server_url is required.")
+        if server_url.startswith("http://"):
+            logger.warning(
+                "tgram-analytics: server_url uses http:// — all data including "
+                "your API key will be sent in cleartext. Use https:// in production."
+            )
 
         self._api_key = api_key
         self._server_url = server_url.rstrip("/")
         self._client = httpx.Client(timeout=timeout)
         self._session_properties: dict[str, EventProperties] = {}
+        self._session_lock = threading.Lock()
         self._queue: SyncQueue | None = None
 
         if batch:
@@ -64,10 +71,11 @@ class TGA:
         properties: EventProperties | None = None,
     ) -> None:
         """Track a custom event."""
-        merged = {
-            **self._session_properties.get(session_id, {}),
-            **(properties or {}),
-        }
+        with self._session_lock:
+            merged = {
+                **self._session_properties.get(session_id, {}),
+                **(properties or {}),
+            }
         payload = TrackPayload(
             api_key=self._api_key,
             event_name=event_name,
@@ -85,10 +93,11 @@ class TGA:
         properties: EventProperties | None = None,
     ) -> None:
         """Track a pageview event."""
-        merged = {
-            **self._session_properties.get(session_id, {}),
-            **(properties or {}),
-        }
+        with self._session_lock:
+            merged = {
+                **self._session_properties.get(session_id, {}),
+                **(properties or {}),
+            }
         payload = PageviewPayload(
             api_key=self._api_key,
             session_id=session_id,
@@ -101,12 +110,14 @@ class TGA:
 
     def identify(self, session_id: str, properties: EventProperties) -> None:
         """Attach persistent properties to all subsequent events for this session."""
-        existing = self._session_properties.get(session_id, {})
-        self._session_properties[session_id] = {**existing, **properties}
+        with self._session_lock:
+            existing = self._session_properties.get(session_id, {})
+            self._session_properties[session_id] = {**existing, **properties}
 
     def forget(self, session_id: str) -> None:
         """Remove stored identify() properties for a session."""
-        self._session_properties.pop(session_id, None)
+        with self._session_lock:
+            self._session_properties.pop(session_id, None)
 
     def flush(self) -> None:
         """Flush batched events. No-op if batching is disabled."""

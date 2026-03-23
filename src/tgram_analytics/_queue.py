@@ -71,7 +71,14 @@ class SyncQueue:
 
 
 class AsyncQueue:
-    """Async batching queue with asyncio.Task-based timer flush."""
+    """Async batching queue with asyncio.Task-based timer flush.
+
+    ``push()`` is synchronous and has no await points, making it atomic under
+    asyncio's cooperative scheduling (only one coroutine runs at a time, and it
+    cannot be interrupted without an explicit ``await``).  ``flush()`` acquires
+    an asyncio.Lock so concurrent callers (e.g. a timer task and an explicit
+    flush) do not double-drain the buffer.
+    """
 
     def __init__(
         self, server_url: str, client: httpx.AsyncClient, options: BatchOptions
@@ -81,8 +88,16 @@ class AsyncQueue:
         self._options = options
         self._buffer: list[QueuedEvent] = []
         self._timer_task: asyncio.Task[None] | None = None
+        self._flush_lock: asyncio.Lock | None = None  # created lazily inside the loop
+
+    def _get_flush_lock(self) -> asyncio.Lock:
+        if self._flush_lock is None:
+            self._flush_lock = asyncio.Lock()
+        return self._flush_lock
 
     def push(self, endpoint: str, payload: dict[str, Any]) -> None:
+        # No await points here — this method is atomic under asyncio's
+        # cooperative scheduling.
         self._buffer.append(QueuedEvent(endpoint=endpoint, payload=payload))
         if len(self._buffer) >= self._options.max_size:
             if self._timer_task is not None:
@@ -97,11 +112,14 @@ class AsyncQueue:
         await self.flush()
 
     async def flush(self) -> None:
-        if self._timer_task is not None:
-            self._timer_task.cancel()
-            self._timer_task = None
-        events = self._buffer[:]
-        self._buffer.clear()
+        # Lock ensures that a timer-triggered flush and an explicit flush()
+        # call cannot both drain the buffer concurrently.
+        async with self._get_flush_lock():
+            if self._timer_task is not None:
+                self._timer_task.cancel()
+                self._timer_task = None
+            events = self._buffer[:]
+            self._buffer.clear()
         for ev in events:
             await send_async(
                 self._client, f"{self._server_url}{ev.endpoint}", ev.payload

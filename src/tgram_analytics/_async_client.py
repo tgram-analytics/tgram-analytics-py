@@ -39,12 +39,18 @@ class AsyncTGA:
             )
         if not server_url:
             raise ValueError("server_url is required.")
+        if server_url.startswith("http://"):
+            logger.warning(
+                "tgram-analytics: server_url uses http:// — all data including "
+                "your API key will be sent in cleartext. Use https:// in production."
+            )
 
         self._api_key = api_key
         self._server_url = server_url.rstrip("/")
         self._client = httpx.AsyncClient(timeout=timeout)
         self._session_properties: dict[str, EventProperties] = {}
         self._queue: AsyncQueue | None = None
+        self._inflight: set[asyncio.Task[None]] = set()
 
         if batch:
             opts = batch if isinstance(batch, BatchOptions) else BatchOptions()
@@ -113,14 +119,19 @@ class AsyncTGA:
             await self._queue.flush()
 
     async def close(self) -> None:
-        """Flush pending events and close the HTTP client."""
+        """Flush pending events, wait for in-flight sends, and close the HTTP client."""
         await self.flush()
+        if self._inflight:
+            await asyncio.gather(*self._inflight, return_exceptions=True)
+            self._inflight.clear()
         await self._client.aclose()
 
     def _dispatch(self, endpoint: str, payload: dict[str, Any]) -> None:
         if self._queue is not None:
             self._queue.push(endpoint, payload)
         else:
-            asyncio.ensure_future(
+            task = asyncio.ensure_future(
                 send_async(self._client, f"{self._server_url}{endpoint}", payload)
             )
+            self._inflight.add(task)
+            task.add_done_callback(self._inflight.discard)
