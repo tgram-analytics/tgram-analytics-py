@@ -8,6 +8,8 @@ Lightweight Python SDK for [tgram-analytics](https://github.com/tgram-analytics)
 pip install tgram-analytics
 ```
 
+Get a free `proj_` API key from [@MyTelegramAnalyticsBot](https://t.me/MyTelegramAnalyticsBot) on Telegram (1 project free), or [self-host the server](https://github.com/tgram-analytics/server) and create keys via your own bot.
+
 ## Quick start (sync)
 
 ```python
@@ -109,3 +111,11 @@ Only the constructor raises exceptions (on invalid `api_key` or missing `server_
 ## License
 
 MIT
+
+## Links
+
+- Website: <https://tgram-analytics.com>
+- Server (API): <https://github.com/tgram-analytics/server>
+- JS SDK: <https://github.com/tgram-analytics/tgram-analytics-js>
+- Python SDK: <https://github.com/tgram-analytics/tgram-analytics-py>
+- Flutter SDK: <https://github.com/tgram-analytics/tgram-analytics-flutter>
