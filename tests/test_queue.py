@@ -85,3 +85,28 @@ class TestAsyncQueue:
             q.push("/api/v1/track", {"a": 1})
             await asyncio.sleep(0.3)
             assert respx.calls.call_count == 1
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_timer_flush_does_not_self_cancel(self) -> None:
+        """Regression test for a bug where ``_timer_flush`` delegated to
+        ``flush()``, which cancelled the timer task itself. The cancel was
+        scheduled before the network ``await``, so events were drained from
+        the buffer but ``CancelledError`` fired before any send completed,
+        silently dropping every batched event in production."""
+        respx.post(f"{SERVER}/api/v1/track").mock(return_value=httpx.Response(202))
+        async with httpx.AsyncClient() as client:
+            q = AsyncQueue(SERVER, client, BatchOptions(max_size=100, max_wait=0.05))
+            q.push("/api/v1/track", {"a": 1})
+            q.push("/api/v1/track", {"a": 2})
+            q.push("/api/v1/track", {"a": 3})
+            timer_task = q._timer_task
+            assert timer_task is not None
+            await asyncio.sleep(0.2)
+            # The timer task must finish normally — not be cancelled — and
+            # all three events must have been sent.
+            assert timer_task.done()
+            assert not timer_task.cancelled()
+            assert timer_task.exception() is None
+            assert respx.calls.call_count == 3
+            assert q._buffer == []

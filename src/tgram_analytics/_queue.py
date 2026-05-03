@@ -108,8 +108,21 @@ class AsyncQueue:
             self._timer_task = asyncio.ensure_future(self._timer_flush())
 
     async def _timer_flush(self) -> None:
+        # Drain locally rather than delegating to ``flush()``. ``flush()``
+        # cancels ``self._timer_task`` for the case where it is called
+        # externally — but that task is the one running this very coroutine,
+        # so the cancel would fire on the next ``await`` (the network send)
+        # and silently drop the events that had just been moved out of the
+        # buffer. See ``test_timer_flush_does_not_self_cancel``.
         await asyncio.sleep(self._options.max_wait)
-        await self.flush()
+        async with self._get_flush_lock():
+            self._timer_task = None
+            events = self._buffer[:]
+            self._buffer.clear()
+        for ev in events:
+            await send_async(
+                self._client, f"{self._server_url}{ev.endpoint}", ev.payload
+            )
 
     async def flush(self) -> None:
         # Lock ensures that a timer-triggered flush and an explicit flush()
