@@ -155,3 +155,52 @@ class TestContextManager:
             tga.track("e1", "s1")
         # exiting context manager should flush
         assert respx.calls.call_count == 1
+
+
+class TestArrayProperties:
+    """Multi-value (array-valued) properties round-trip end-to-end."""
+
+    @respx.mock
+    def test_track_accepts_string_list(self) -> None:
+        respx.post(f"{SERVER}/api/v1/track").mock(return_value=httpx.Response(202))
+        with TGA(API_KEY, SERVER) as tga:
+            tga.track(
+                "onboarding_completed",
+                "sess-1",
+                {"role": "creator", "interest": ["vertical_to_horizontal", "unsure"]},
+            )
+        body = last_request_body()
+        assert body["properties"]["interest"] == ["vertical_to_horizontal", "unsure"]
+        assert body["properties"]["role"] == "creator"
+
+    @respx.mock
+    def test_track_accepts_int_list(self) -> None:
+        respx.post(f"{SERVER}/api/v1/track").mock(return_value=httpx.Response(202))
+        with TGA(API_KEY, SERVER) as tga:
+            tga.track("e", "s1", {"scores": [1, 2, 3]})
+        assert last_request_body()["properties"]["scores"] == [1, 2, 3]
+
+    @respx.mock
+    def test_track_preserves_list_order(self) -> None:
+        """Sort is a server-side concern (for ``_set``-suffixed keys)."""
+        respx.post(f"{SERVER}/api/v1/track").mock(return_value=httpx.Response(202))
+        with TGA(API_KEY, SERVER) as tga:
+            tga.track("e", "s1", {"tags": ["b", "a", "c"]})
+        assert last_request_body()["properties"]["tags"] == ["b", "a", "c"]
+
+    def test_track_rejects_dict_inside_list(self) -> None:
+        with TGA(API_KEY, SERVER) as tga, pytest.raises(TypeError, match="tags"):
+            tga.track("e", "s1", {"tags": [{"x": 1}]})  # type: ignore[list-item]
+
+    def test_track_rejects_nested_list(self) -> None:
+        with TGA(API_KEY, SERVER) as tga, pytest.raises(TypeError, match="tags"):
+            tga.track("e", "s1", {"tags": [[1, 2]]})  # type: ignore[list-item]
+
+    def test_identify_accepts_list(self) -> None:
+        with TGA(API_KEY, SERVER) as tga:
+            tga.identify("s1", {"ab_variants": ["A", "B"]})
+            assert tga._session_properties["s1"]["ab_variants"] == ["A", "B"]
+
+    def test_identify_rejects_bad_list(self) -> None:
+        with TGA(API_KEY, SERVER) as tga, pytest.raises(TypeError, match="bad"):
+            tga.identify("s1", {"bad": [{}]})  # type: ignore[list-item]

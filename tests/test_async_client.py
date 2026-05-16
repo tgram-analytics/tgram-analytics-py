@@ -97,3 +97,32 @@ class TestAsyncContextManager:
         async with AsyncTGA(API_KEY, SERVER, batch=True) as tga:
             tga.track("e1", "s1")
         assert respx.calls.call_count == 1
+
+
+class TestAsyncArrayProperties:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_track_accepts_string_list(self) -> None:
+        respx.post(f"{SERVER}/api/v1/track").mock(return_value=httpx.Response(202))
+        async with AsyncTGA(API_KEY, SERVER, batch=True) as tga:
+            tga.track("e", "s1", {"interest": ["a", "b"]})
+            await tga.flush()
+        assert last_request_body()["properties"]["interest"] == ["a", "b"]
+
+    @pytest.mark.asyncio
+    async def test_track_rejects_dict_inside_list(self) -> None:
+        async with AsyncTGA(API_KEY, SERVER) as tga:
+            with pytest.raises(TypeError, match="tags"):
+                tga.track("e", "s1", {"tags": [{}]})  # type: ignore[list-item]
+
+    @pytest.mark.asyncio
+    async def test_identify_accepts_list(self) -> None:
+        async with AsyncTGA(API_KEY, SERVER) as tga:
+            tga.identify("s1", {"ab_variants": ["A", "B"]})
+            assert tga._session_properties["s1"]["ab_variants"] == ["A", "B"]
+
+    @pytest.mark.asyncio
+    async def test_identify_rejects_bad_list(self) -> None:
+        async with AsyncTGA(API_KEY, SERVER) as tga:
+            with pytest.raises(TypeError, match="bad"):
+                tga.identify("s1", {"bad": [object()]})  # type: ignore[list-item]

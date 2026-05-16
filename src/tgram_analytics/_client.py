@@ -10,6 +10,7 @@ import httpx
 from ._queue import SyncQueue
 from ._transport import send_sync
 from ._types import BatchOptions, EventProperties, PageviewPayload, TrackPayload
+from ._validate import validate_properties
 
 logger = logging.getLogger("tgram_analytics")
 
@@ -70,7 +71,14 @@ class TGA:
         session_id: str,
         properties: EventProperties | None = None,
     ) -> None:
-        """Track a custom event."""
+        """Track a custom event.
+
+        :raises TypeError: When ``properties`` contains an unsupported value
+                           shape (e.g. nested dict, nested list). See
+                           :func:`tgram_analytics._validate.validate_properties`.
+        """
+        if properties is not None:
+            validate_properties(properties, "track")
         with self._session_lock:
             merged = {
                 **self._session_properties.get(session_id, {}),
@@ -92,7 +100,13 @@ class TGA:
         referrer: str | None = None,
         properties: EventProperties | None = None,
     ) -> None:
-        """Track a pageview event."""
+        """Track a pageview event.
+
+        :raises TypeError: When ``properties`` contains an unsupported value
+                           shape.
+        """
+        if properties is not None:
+            validate_properties(properties, "pageview")
         with self._session_lock:
             merged = {
                 **self._session_properties.get(session_id, {}),
@@ -109,7 +123,12 @@ class TGA:
         self._dispatch("/api/v1/pageview", payload.to_dict())
 
     def identify(self, session_id: str, properties: EventProperties) -> None:
-        """Attach persistent properties to all subsequent events for this session."""
+        """Attach persistent properties to all subsequent events for this session.
+
+        :raises TypeError: When ``properties`` contains an unsupported value
+                           shape.
+        """
+        validate_properties(properties, "identify")
         with self._session_lock:
             existing = self._session_properties.get(session_id, {})
             self._session_properties[session_id] = {**existing, **properties}

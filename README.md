@@ -58,6 +58,52 @@ Per-event properties override identified properties when keys conflict.
 
 Call `tga.forget("session-123")` to clear stored properties for a session.
 
+## Multi-value properties
+
+Properties accept **lists of scalars** in addition to single scalars — useful for multi-select inputs, A/B variant memberships, or any set-style attribute that would otherwise be lossy to flatten:
+
+```python
+tga.track(
+    "onboarding_completed",
+    session_id="user-session-123",
+    properties={
+        "role": "creator",
+        "interest_set": ["vertical_to_horizontal", "unsure"],  # list of strings
+    },
+)
+```
+
+Allowed value shapes:
+
+| Shape | Allowed? | Example |
+|---|---|---|
+| Scalar (`str`, `int`, `float`, `bool`, `None`) | ✅ | `{"amount": 49}` |
+| List of scalars | ✅ | `{"tags_set": ["a", "b"]}` |
+| Nested dict | ❌ — raises `TypeError` | `{"user": {"id": 1}}` |
+| Nested list | ❌ — raises `TypeError` | `{"matrix": [[1, 2]]}` |
+| `NaN` / `Infinity` | ❌ — raises `TypeError` | `{"x": float("nan")}` |
+
+Keys ending in `_set` are sorted alphabetically/numerically by the server at write time, so `GROUP BY properties->'interest_set'` collapses `["a", "b"]` and `["b", "a"]` into one bucket. Other list properties keep insertion order.
+
+Two canonical SQL queries for dashboards:
+
+```sql
+-- Per-element count (pie chart):
+SELECT elem, count(*) AS n
+FROM events, jsonb_array_elements_text(properties->'interest_set') AS elem
+WHERE event_name = 'onboarding_completed'
+GROUP BY elem
+ORDER BY n DESC;
+
+-- Most common combos:
+SELECT properties->'interest_set' AS combo, count(*) AS n
+FROM events
+WHERE event_name = 'onboarding_completed'
+GROUP BY combo
+ORDER BY n DESC
+LIMIT 20;
+```
+
 ## API reference
 
 ### `TGA(api_key, server_url, *, batch=False, timeout=10.0)`
