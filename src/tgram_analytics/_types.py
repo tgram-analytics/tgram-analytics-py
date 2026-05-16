@@ -3,7 +3,25 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Union
 
-EventProperties = dict[str, Union[str, int, float, bool, None]]
+#: A single JSON-safe scalar — the building block of :data:`EventProperties`.
+EventPropertyScalar = Union[str, int, float, bool, None]
+
+#: One value in an :data:`EventProperties` dict — either a scalar or a list
+#: of scalars. Nested lists and dict values are intentionally not part of
+#: the type so the server-side JSONB column stays cheap to query.
+EventPropertyValue = Union[EventPropertyScalar, list[EventPropertyScalar]]
+
+#: Arbitrary key-value properties attached to events.
+#:
+#: Values must be JSON-serialisable scalars — ``str``, ``int``, ``float``,
+#: ``bool``, ``None`` — or a ``list`` of those scalars (e.g. for
+#: multi-select onboarding answers like
+#: ``{"interest_set": ["vertical_to_horizontal", "unsure"]}``).
+#:
+#: Keys ending in ``_set`` are sorted server-side at write time, so
+#: ``GROUP BY properties->'foo_set'`` collapses equivalent combinations
+#: into a single bucket without read-time normalisation.
+EventProperties = dict[str, EventPropertyValue]
 
 
 @dataclass(frozen=True)
