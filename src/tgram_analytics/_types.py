@@ -16,11 +16,13 @@ EventPropertyValue = Union[EventPropertyScalar, list[EventPropertyScalar]]
 #: Values must be JSON-serialisable scalars — ``str``, ``int``, ``float``,
 #: ``bool``, ``None`` — or a ``list`` of those scalars (e.g. for
 #: multi-select onboarding answers like
-#: ``{"interest_set": ["vertical_to_horizontal", "unsure"]}``).
+#: ``{"interest": ["vertical_to_horizontal", "unsure"]}``).
 #:
-#: Keys ending in ``_set`` are sorted server-side at write time, so
-#: ``GROUP BY properties->'foo_set'`` collapses equivalent combinations
-#: into a single bucket without read-time normalisation.
+#: Every array property is sorted server-side at write time, so
+#: ``GROUP BY properties->'foo'`` collapses equivalent combinations into
+#: a single bucket without read-time normalisation. No naming convention
+#: required. If insertion order matters for some property, serialize the
+#: list to a string instead.
 EventProperties = dict[str, EventPropertyValue]
 
 

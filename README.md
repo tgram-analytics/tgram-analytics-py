@@ -68,7 +68,9 @@ tga.track(
     session_id="user-session-123",
     properties={
         "role": "creator",
-        "interest_set": ["vertical_to_horizontal", "unsure"],  # list of strings
+        # Plain "interest" — the server sorts every array at write time,
+        # so no special key convention is needed.
+        "interest": ["vertical_to_horizontal", "unsure"],
     },
 )
 ```
@@ -78,25 +80,25 @@ Allowed value shapes:
 | Shape | Allowed? | Example |
 |---|---|---|
 | Scalar (`str`, `int`, `float`, `bool`, `None`) | ✅ | `{"amount": 49}` |
-| List of scalars | ✅ | `{"tags_set": ["a", "b"]}` |
+| List of scalars | ✅ | `{"tags": ["a", "b"]}` |
 | Nested dict | ❌ — raises `TypeError` | `{"user": {"id": 1}}` |
 | Nested list | ❌ — raises `TypeError` | `{"matrix": [[1, 2]]}` |
 | `NaN` / `Infinity` | ❌ — raises `TypeError` | `{"x": float("nan")}` |
 
-Keys ending in `_set` are sorted alphabetically/numerically by the server at write time, so `GROUP BY properties->'interest_set'` collapses `["a", "b"]` and `["b", "a"]` into one bucket. Other list properties keep insertion order.
+The server **sorts every array property at write time**, so `["a", "b"]` and `["b", "a"]` collapse to the same JSONB value and `GROUP BY properties->'interest'` is a trivial combo query. If insertion order matters (e.g. `recent_searches: ["pizza", "pasta"]`), serialize to a string or use a dict with positional keys — every array gets sorted regardless of key name.
 
 Two canonical SQL queries for dashboards:
 
 ```sql
 -- Per-element count (pie chart):
 SELECT elem, count(*) AS n
-FROM events, jsonb_array_elements_text(properties->'interest_set') AS elem
+FROM events, jsonb_array_elements_text(properties->'interest') AS elem
 WHERE event_name = 'onboarding_completed'
 GROUP BY elem
 ORDER BY n DESC;
 
 -- Most common combos:
-SELECT properties->'interest_set' AS combo, count(*) AS n
+SELECT properties->'interest' AS combo, count(*) AS n
 FROM events
 WHERE event_name = 'onboarding_completed'
 GROUP BY combo
