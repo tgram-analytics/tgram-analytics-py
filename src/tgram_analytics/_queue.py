@@ -23,9 +23,7 @@ class QueuedEvent:
 class SyncQueue:
     """Thread-safe batching queue with background timer flush."""
 
-    def __init__(
-        self, server_url: str, client: httpx.Client, options: BatchOptions
-    ) -> None:
+    def __init__(self, server_url: str, client: httpx.Client, options: BatchOptions) -> None:
         self._server_url = server_url
         self._client = client
         self._options = options
@@ -80,9 +78,7 @@ class AsyncQueue:
     flush) do not double-drain the buffer.
     """
 
-    def __init__(
-        self, server_url: str, client: httpx.AsyncClient, options: BatchOptions
-    ) -> None:
+    def __init__(self, server_url: str, client: httpx.AsyncClient, options: BatchOptions) -> None:
         self._server_url = server_url
         self._client = client
         self._options = options
@@ -120,9 +116,7 @@ class AsyncQueue:
             events = self._buffer[:]
             self._buffer.clear()
         for ev in events:
-            await send_async(
-                self._client, f"{self._server_url}{ev.endpoint}", ev.payload
-            )
+            await send_async(self._client, f"{self._server_url}{ev.endpoint}", ev.payload)
 
     async def flush(self) -> None:
         # Lock ensures that a timer-triggered flush and an explicit flush()
@@ -134,6 +128,4 @@ class AsyncQueue:
             events = self._buffer[:]
             self._buffer.clear()
         for ev in events:
-            await send_async(
-                self._client, f"{self._server_url}{ev.endpoint}", ev.payload
-            )
+            await send_async(self._client, f"{self._server_url}{ev.endpoint}", ev.payload)
