@@ -34,6 +34,7 @@ class TGA:
         *,
         batch: bool | BatchOptions = False,
         timeout: float = 10.0,
+        test: bool = False,
     ) -> None:
         if not api_key or not api_key.startswith("proj_"):
             raise ValueError(
@@ -50,6 +51,7 @@ class TGA:
 
         self._api_key = api_key
         self._server_url = server_url.rstrip("/")
+        self._test = test
         self._client = httpx.Client(timeout=timeout)
         self._session_properties: dict[str, EventProperties] = {}
         self._session_lock = threading.Lock()
@@ -149,6 +151,8 @@ class TGA:
         self._client.close()
 
     def _dispatch(self, endpoint: str, payload: dict[str, Any]) -> None:
+        if self._test:
+            payload["test"] = True
         if self._queue is not None:
             self._queue.push(endpoint, payload)
         else:

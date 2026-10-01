@@ -4,6 +4,17 @@ All notable changes to `tgram-analytics` (the Python SDK) are documented in this
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-10-01
+
+### Added
+- **Test mode.** New constructor parameter `test: bool = False` on `TGA` and `AsyncTGA`. When `True`, every `track()` and `pageview()` request body includes `"test": true`, so the server stores the event but keeps it out of analytics. When `False` (the default), the field is not sent and request bodies are unchanged.
+
+  ```python
+  tga = TGA("proj_xxx", "https://analytics.example.com", test=True)
+  ```
+
+  Servers that do not support test events ignore the extra field.
+
 ## [0.2.0] — 2026-05-16
 
 ### Added
