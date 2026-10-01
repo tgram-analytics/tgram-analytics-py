@@ -70,7 +70,7 @@ from tgram_analytics import TGA
 tga = TGA(
     "proj_xxx",
     "https://analytics.example.com",
-    test=os.environ.get("APP_ENV") != "production",
+    test=os.environ.get("APP_ENV") == "staging",
 )
 ```
 
