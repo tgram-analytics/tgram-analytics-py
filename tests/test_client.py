@@ -204,3 +204,46 @@ class TestArrayProperties:
     def test_identify_rejects_bad_list(self) -> None:
         with TGA(API_KEY, SERVER) as tga, pytest.raises(TypeError, match="bad"):
             tga.identify("s1", {"bad": [{}]})  # type: ignore[list-item]
+
+
+class TestTestMode:
+    """``test=True`` marks every request body with ``"test": true``."""
+
+    @respx.mock
+    def test_track_omits_test_by_default(self) -> None:
+        respx.post(f"{SERVER}/api/v1/track").mock(return_value=httpx.Response(202))
+        with TGA(API_KEY, SERVER) as tga:
+            tga.track("signup", "sess-1")
+        assert "test" not in last_request_body()
+
+    @respx.mock
+    def test_pageview_omits_test_by_default(self) -> None:
+        respx.post(f"{SERVER}/api/v1/pageview").mock(return_value=httpx.Response(202))
+        with TGA(API_KEY, SERVER) as tga:
+            tga.pageview("sess-1", "/home")
+        assert "test" not in last_request_body()
+
+    @respx.mock
+    def test_track_includes_test_when_enabled(self) -> None:
+        respx.post(f"{SERVER}/api/v1/track").mock(return_value=httpx.Response(202))
+        with TGA(API_KEY, SERVER, test=True) as tga:
+            tga.track("signup", "sess-1")
+        assert last_request_body()["test"] is True
+
+    @respx.mock
+    def test_pageview_includes_test_when_enabled(self) -> None:
+        respx.post(f"{SERVER}/api/v1/pageview").mock(return_value=httpx.Response(202))
+        with TGA(API_KEY, SERVER, test=True) as tga:
+            tga.pageview("sess-1", "/home")
+        assert last_request_body()["test"] is True
+
+    @respx.mock
+    def test_batched_events_include_test_when_enabled(self) -> None:
+        respx.post(f"{SERVER}/api/v1/track").mock(return_value=httpx.Response(202))
+        respx.post(f"{SERVER}/api/v1/pageview").mock(return_value=httpx.Response(202))
+        with TGA(API_KEY, SERVER, batch=BatchOptions(max_size=100), test=True) as tga:
+            tga.track("e1", "s1")
+            tga.pageview("s1", "/home")
+        bodies = [json.loads(call.request.content) for call in respx.calls]
+        assert len(bodies) == 2
+        assert all(body["test"] is True for body in bodies)

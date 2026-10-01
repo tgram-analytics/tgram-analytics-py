@@ -58,6 +58,24 @@ Per-event properties override identified properties when keys conflict.
 
 Call `tga.forget("session-123")` to clear stored properties for a session.
 
+## Test mode
+
+Pass `test=True` to keep events from staging, CI or seed scripts out of your analytics:
+
+```python
+import os
+
+from tgram_analytics import TGA
+
+tga = TGA(
+    "proj_xxx",
+    "https://analytics.example.com",
+    test=os.environ.get("APP_ENV") != "production",
+)
+```
+
+With `test=True`, every request body includes `"test": true`. The server stores test events, but analytics, reports and alerts ignore them. Recent activity, `/doctor` and the MCP `recent_events` / `verify_integration` tools still show them, marked 🧪, so you can check that your integration works.
+
 ## Multi-value properties
 
 Properties accept **lists of scalars** in addition to single scalars — useful for multi-select inputs, A/B variant memberships, or any set-style attribute that would otherwise be lossy to flatten:
@@ -108,14 +126,15 @@ LIMIT 20;
 
 ## API reference
 
-### `TGA(api_key, server_url, *, batch=False, timeout=10.0)`
+### `TGA(api_key, server_url, *, batch=False, timeout=10.0, test=False)`
 
 Sync client. `api_key` must start with `"proj_"`.
 
 - `batch` — `False` (default), `True` (default thresholds), or `BatchOptions(max_size=10, max_wait=5.0)`
 - `timeout` — HTTP request timeout in seconds
+- `test` — `True` marks every event as a test event (see [Test mode](#test-mode))
 
-### `AsyncTGA(api_key, server_url, *, batch=False, timeout=10.0)`
+### `AsyncTGA(api_key, server_url, *, batch=False, timeout=10.0, test=False)`
 
 Async client with the same constructor signature.
 
